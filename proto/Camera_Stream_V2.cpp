@@ -16,7 +16,7 @@
 using namespace libcamera;
 
 static libcamera::Camera *g_camera = nullptr;
-
+static cv::VideoWriter g_writer;
 
 static void requestComplete(Request *request)
 {
@@ -26,40 +26,30 @@ static void requestComplete(Request *request)
 
     const auto &buffers = request->buffers();
     FrameBuffer *buffer = buffers.begin()->second;
-
     const FrameBuffer::Plane &plane = buffer->planes()[0];
 
-    void *mapped = mmap(nullptr,
-                        plane.length,
-                        PROT_READ,
-                        MAP_SHARED,
-                        plane.fd.get(),
-                        0);
-
-    if (mapped == MAP_FAILED) {
-        perror("mmap");
+    void *mapped = mmap(nullptr, plane.length,
+                        PROT_READ, MAP_SHARED,
+                        plane.fd.get(), 0);
+    if (mapped == MAP_FAILED)
         return;
-    }
 
-    // Wrap libcamera buffer (XBGR8888)
     cv::Mat frameRGBA(
-        1536,
-        2048,
+        480,
+        640,
         CV_8UC4,
         mapped,
-        2048 * 4
+        640 * 4
     );
 
-    // Convert to BGR for OpenCV display
     cv::Mat frameBGR;
-    cv::cvtColor(frameRGBA, frameBGR, cv::COLOR_BGRA2BGR);
+    cv::cvtColor(frameRGBA, frameBGR, cv::COLOR_RGBA2BGR);
 
-    cv::imshow("Pi Camera", frameBGR);
-    cv::waitKey(1);
+    // 🚀 STREAM TO VLC
+    g_writer.write(frameBGR);
 
     munmap(mapped, plane.length);
 
-    // VERY IMPORTANT: reuse + requeue
     request->reuse(Request::ReuseBuffers);
     g_camera->queueRequest(request);
 
@@ -84,8 +74,8 @@ int main() {
     std::unique_ptr<CameraConfiguration> config =
         camera->generateConfiguration({ StreamRole::Viewfinder });
     config->at(0).pixelFormat = formats::XRGB8888;
-    config->at(0).size.width = 2048;
-    config->at(0).size.height = 1536;
+    config->at(0).size.width = 640;
+    config->at(0).size.height = 480;
 
     if (camera->configure(config.get()) != 0) {
         std::cerr << "Failed to configure camera" << std::endl;
@@ -135,12 +125,31 @@ int main() {
     camera->requestCompleted.connect(requestComplete);
     camera->start();
 
+    std::string gst_pipeline =
+        "appsrc ! videoconvert ! "
+        "x264enc tune=zerolatency bitrate=4000 speed-preset=ultrafast ! "
+        "rtph264pay name=pay0 pt=96 ! "
+        "gdppay ! tcpserversink host=0.0.0.0 port=8554 sync=false";
+
+    g_writer.open(
+        gst_pipeline,
+        cv::CAP_GSTREAMER,
+        0,
+        30.0,
+        cv::Size(640, 480),
+        true
+    );
+
+    if (!g_writer.isOpened()) {
+        std::cerr << "Failed to open GStreamer pipeline" << std::endl;
+        return -1;
+    }
+
     for (std::unique_ptr<Request> &request : requests)
         camera->queueRequest(request.get());
 
     while (true)
         
-    
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
 

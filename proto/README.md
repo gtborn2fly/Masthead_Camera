@@ -1,0 +1,2 @@
+### Prototypes
+This folder contains prototypes for the cameras and the 9 DOF sensor. The intent of these files are to quickly evaluate different techonologies that may be used in the final design. These files are not compiled into the final design. Any code that is used from these files will be manually mincluded in the final design.
