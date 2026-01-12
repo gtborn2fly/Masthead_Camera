@@ -48,7 +48,15 @@ void parseAndRemap(uint8_t* data) {
         pitch = asin(sinp) * 180.0 / M_PI;
 
     // Yaw: Rotation about Z-axis
-    double yaw = -1 * (atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)) * 180.0 / M_PI);
+    double yaw = (-1 * (atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)) * 180.0 / M_PI)) - 90;
+
+    // Adjust to 0 to 360 deg
+    if (yaw < 0){
+        yaw += 360;
+    }
+    else if (yaw > 360){
+        yaw -= 360;
+    }
 
     printf("Pitch: %6.2f | Roll: %6.2f | Yaw: %6.2f   \r", pitch, roll, yaw);
     fflush(stdout);
