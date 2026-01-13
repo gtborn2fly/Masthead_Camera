@@ -23,71 +23,62 @@ static void on_draw_overlay(GstElement *overlay, cairo_t *cr, guint64 timestamp,
 
     getAttitude(&pitch, &roll, &heading);
 
-    // Convert degrees to radians
+    // Convert degrees to radians for Cairo rotation
     double roll_rad = roll * DEG_TO_RAD;
 
-    // Compute the angle line pixel heights
-    double height_0_deg  = (center_y + height_per_deg * (pitch + VERTICAL_OFFSET_DEG));
-    
-    // Set drawing parameters (White line)
-    cairo_set_source_rgb(cr, 1.0, 1.0, 1.0); 
-    cairo_set_line_width(cr, 3.0);
+    // --- DRAW PITCH LADDER ---
+    // The "Horizon Center" is moved vertically by the current pitch
+    double vertical_pitch_offset = (pitch + VERTICAL_OFFSET_DEG) * height_per_deg;
 
-    // Put a line every 5 degrees from -5 to 30
-    for (auto cur_line : ANGLE_LINE_SETTINGS){
-
-        double cur_height = height_0_deg - (height_per_deg * cur_line.angle);
-
-
+    for (auto cur_line : ANGLE_LINE_SETTINGS) {
         cairo_save(cr);
-        cairo_translate(cr, center_x, cur_height);
+
+        // 1. Move to the screen center
+        cairo_translate(cr, center_x, center_y);
+
+        // 2. Rotate the entire canvas by the roll angle
+        // Using -roll_rad because cairo rotates clockwise
         cairo_rotate(cr, -roll_rad);
 
-        // Draw the horizontal line (-300 to 300 pixels from center)
-        cairo_move_to(cr, -WIDTH * cur_line.width_ratio / 2, 0);
-        cairo_line_to(cr, WIDTH  * cur_line.width_ratio / 2, 0);
-        cairo_stroke(cr);
-        
-        cairo_restore(cr);
-        
-        if(cur_line.display_text){
-            cairo_save(cr);
+        // 3. Offset vertically for the current pitch + the specific line angle
+        // Subtract because in screen space, higher pitch moves the horizon down
+        double line_y_offset = vertical_pitch_offset - (cur_line.angle * height_per_deg);
+        cairo_translate(cr, 0, line_y_offset);
 
-            // Optional: Draw the "0" text using Cairo instead of a separate element
+        // 4. Draw the horizontal line (relative to new 0,0)
+        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0); 
+        cairo_set_line_width(cr, 3.0);
+        
+        double line_half_width = (WIDTH * cur_line.width_ratio) / 2.0;
+        cairo_move_to(cr, -line_half_width, 0);
+        cairo_line_to(cr, line_half_width, 0);
+        cairo_stroke(cr);
+
+        // 5. Draw text next to the line if enabled
+        if (cur_line.display_text) {
             cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-            cairo_set_font_size(cr, 25.0);
-            cairo_move_to(cr, center_x - WIDTH*0.2, cur_height - 10);
-            cairo_show_text(cr, std::to_string(cur_line.angle).c_str());
-            cairo_restore(cr);
+            cairo_set_font_size(cr, 20.0);
+            cairo_move_to(cr, line_half_width + 10, 7); // Offset to the right of the line
+            cairo_show_text(cr, std::to_string((int)cur_line.angle).c_str());
         }
+
+        cairo_restore(cr);
     }
 
 #ifdef DEBUG
+    // Fixed debug text (non-rotating)
     cairo_save(cr);
-
-    // Optional: Draw the Pitch text using Cairo instead of a separate element
+    cairo_set_source_rgb(cr, 1.0, 1.0, 0.0); // Yellow for debug
     cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-    cairo_set_font_size(cr, 25.0);
-    cairo_move_to(cr, 10, HEIGHT - 70);
-    cairo_show_text(cr, ("Pitch  =" + std::to_string(pitch)).c_str());
+    cairo_set_font_size(cr, 20.0);
 
+    cairo_move_to(cr, 20, HEIGHT - 70);
+    cairo_show_text(cr, ("Pitch: " + std::to_string(pitch)).c_str());
+    cairo_move_to(cr, 20, HEIGHT - 45);
+    cairo_show_text(cr, ("Roll:  " + std::to_string(roll)).c_str());
+    cairo_move_to(cr, 20, HEIGHT - 20);
+    cairo_show_text(cr, ("Head:  " + std::to_string(heading)).c_str());
     cairo_restore(cr);
-    cairo_save(cr);
-
-    // Optional: Draw the Roll text using Cairo instead of a separate element
-    cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-    cairo_set_font_size(cr, 25.0);
-    cairo_move_to(cr, 10, HEIGHT - 40);
-    cairo_show_text(cr, ("Roll   =" + std::to_string(roll)).c_str());
-
-    cairo_restore(cr);
-    cairo_save(cr);
-
-    // Optional: Draw the Heading text using Cairo instead of a separate element
-    cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-    cairo_set_font_size(cr, 25.0);
-    cairo_move_to(cr, 10, HEIGHT - 10);
-    cairo_show_text(cr, ("Heading=" + std::to_string(heading)).c_str());
 #endif
 }
 
@@ -102,51 +93,32 @@ int startStreaming() {
     // Pipeline 1: Includes Dynamic Cairo Overlay
     // Note: videoconvert to BGRA is required for Cairo, then back to NV12 for x264enc
     const std::string pipeline_desc = 
-        
-        // Camera Video Source 1 - Forward with normal angle lense
+
         "libcamerasrc camera-name=\"/base/axi/pcie@1000120000/rp1/i2c@88000/imx708@1a\" ! "
-        
-        // Convert the video to common format
-        "videoconvert ! "
-
-        // Indicate that the video is to be scaled and not cropped. Maintain aspect ratio with add-borders.
-        "videoscale add-borders=true ! "
-        
-        // Set the resolution of the video and convert it to NV12
-        "video/x-raw,format=NV12,width=" + std::to_string(WIDTH) + ",height=" + std::to_string(HEIGHT) + ",framerate=20/1 ! "
- 
-        "queue max-size-buffers=13 leaky=downstream ! videoconvert ! "
-
-        "video/x-raw,format=BGRA ! " 
-
-        "cairooverlay name=horizon_overlay ! "
-
-        "videoconvert ! video/x-raw,format=NV12 ! "
-
-        // Valve to stop buffers from reaching the encoder when no one is watching
+        "video/x-raw,format=NV12,width=1280,height=1080,framerate=30/1 ! " // Set resolution at source
+        "queue max-size-buffers=1 leaky=downstream ! videoconvert ! "
         "valve name=stream_valve drop=true ! " 
-        
-        "x264enc tune=zerolatency speed-preset=ultrafast bitrate=2000 threads=4 key-int-max=30 ! "
-        
+        "video/x-raw,format=BGRA ! " 
+        "queue max-size-buffers=1 leaky=downstream ! "
+        "cairooverlay name=horizon_overlay ! "
+        "videoconvert ! video/x-raw,format=NV12 ! "
+        "queue max-size-buffers=1 leaky=downstream ! "
+        "x264enc tune=zerolatency speed-preset=ultrafast bitrate=3000 threads=4 key-int-max=30 ! "
+        "queue max-size-buffers=1 leaky=downstream ! "
         "h264parse ! "
-
         "mpegtsmux latency=0 pat-interval=100000 pmt-interval=100000 ! " 
-        
-        "srtsink name=mysink uri=srt://:5000?mode=listener&latency=50 wait-for-connection=true";
+        "srtsink name=mysink uri=srt://:5000?mode=listener&latency=50 wait-for-connection=true sync=false";
 
     // Pipeline 2: Standard stream
     const std::string pipeline_desc2 = 
         "libcamerasrc camera-name=\"/base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a\" ! "
-        "videoconvert ! "
-        "videoscale add-borders=true ! "
-        "video/x-raw,format=NV12,width=" + std::to_string(WIDTH_2) + ",height=" + std::to_string(HEIGHT_2) + ",framerate=20/1 ! "
-        "queue max-size-buffers=1 leaky=downstream ! videoconvert ! "
-        "videoflip method=rotate-180 ! videoconvert ! "
-        
-        // Valve to stop buffers from reaching the encoder when no one is watching
+        "video/x-raw,format=NV12,width=1280,height=1080,framerate=30/1 ! " // Set resolution at source
+        "queue max-size-buffers=1 leaky=downstream ! "
         "valve name=stream_valve2 drop=true ! " 
-        
-        "x264enc tune=zerolatency speed-preset=ultrafast bitrate=2000 threads=4 key-int-max=30 ! "
+        "videoflip method=rotate-180 ! videoconvert ! "
+        "queue max-size-buffers=1 leaky=downstream ! "
+        "x264enc tune=zerolatency speed-preset=ultrafast bitrate=3000 threads=4 key-int-max=30 ! "
+        "queue max-size-buffers=1 leaky=downstream ! "
         "h264parse ! "
         "mpegtsmux latency=0 pat-interval=100000 pmt-interval=100000 ! " 
         "srtsink name=mysink2 uri=srt://:5001?mode=listener&latency=50 wait-for-connection=true";
