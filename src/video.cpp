@@ -1,7 +1,7 @@
 #include <gst/gst.h>
 #include <gst/video/video.h>
 #include <cairo.h>
-#include <math.h>
+
 #include <iostream>
 #include <attitude.hpp>
 #include <video.hpp>
@@ -24,7 +24,7 @@ static void on_draw_overlay(GstElement *overlay, cairo_t *cr, guint64 timestamp,
     getAttitude(&pitch, &roll, &heading);
 
     // Convert degrees to radians
-    double radians = roll * (M_PI / 180.0);
+    double roll_rad = roll * DEG_TO_RAD;
 
     // Compute the angle line pixel heights
     double height_0_deg  = (center_y + height_per_deg * (pitch + VERTICAL_OFFSET_DEG));
@@ -34,29 +34,32 @@ static void on_draw_overlay(GstElement *overlay, cairo_t *cr, guint64 timestamp,
     cairo_set_line_width(cr, 3.0);
 
     // Put a line every 5 degrees from -5 to 30
-    for (int cur_angle = -5; cur_angle <= 30; cur_angle += 5){
+    for (auto cur_line : ANGLE_LINE_SETTINGS){
 
-        double cur_height = height_0_deg - (height_per_deg * cur_angle);
+        double cur_height = height_0_deg - (height_per_deg * cur_line.angle);
+
 
         cairo_save(cr);
         cairo_translate(cr, center_x, cur_height);
-        cairo_rotate(cr, -radians);
+        cairo_rotate(cr, -roll_rad);
 
         // Draw the horizontal line (-300 to 300 pixels from center)
-        cairo_move_to(cr, -WIDTH, 0);
-        cairo_line_to(cr, WIDTH, 0);
+        cairo_move_to(cr, -WIDTH * cur_line.width_ratio / 2, 0);
+        cairo_line_to(cr, WIDTH  * cur_line.width_ratio / 2, 0);
         cairo_stroke(cr);
         
         cairo_restore(cr);
-        cairo_save(cr);
+        
+        if(cur_line.display_text){
+            cairo_save(cr);
 
-        // Optional: Draw the "0" text using Cairo instead of a separate element
-        cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-        cairo_set_font_size(cr, 25.0);
-        cairo_move_to(cr, center_x - 10, cur_height - 10);
-        cairo_show_text(cr, std::to_string(cur_angle).c_str());
-        cairo_restore(cr);
-
+            // Optional: Draw the "0" text using Cairo instead of a separate element
+            cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+            cairo_set_font_size(cr, 25.0);
+            cairo_move_to(cr, center_x - WIDTH*0.2, cur_height - 10);
+            cairo_show_text(cr, std::to_string(cur_line.angle).c_str());
+            cairo_restore(cr);
+        }
     }
 
 #ifdef DEBUG

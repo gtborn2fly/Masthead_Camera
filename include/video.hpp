@@ -1,10 +1,33 @@
 #pragma once
 
+#include <math.h>
+
 //#define DEBUG
 
-static const int WIDTH = 1536, HEIGHT = 864;
+static const float DEG_TO_RAD = (M_PI / 180.0);
+
+struct AngleLineSettings {
+    int   angle;
+    float width_ratio;
+    bool  display_text;
+};
+
+static const AngleLineSettings ANGLE_LINE_SETTINGS[] = {{-10, .3, true},
+                                                        {-5,  .3, true},
+                                                        {0,   .8, true},
+                                                        {1,   .1, false},
+                                                        {2,   .1, false},
+                                                        {3,   .1, false},
+                                                        {4,   .1, false},
+                                                        {5,   .3, true},
+                                                        {10,  .3, true},
+                                                        {15,  .3, true}};
+
+static const int WIDTH   = 1536, HEIGHT   = 864;
 static const int WIDTH_2 = 1332, HEIGHT_2 = 990;
-static const int VERTICAL_FOV_DEG = 41;
+
+static const int VERTICAL_FOV_DEG      = 41;
+static const int HORIZONTAL_FOV_DEG    = 66;
 static const float VERTICAL_OFFSET_DEG = 15.0;  // Angle that the camera is pitched up.
 
 // Public Function Prototypes
