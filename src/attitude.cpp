@@ -109,6 +109,7 @@ void enableRotationVector(int fd) {
  */
 void parseAndRemap(uint8_t* data) {
     // 1. Extract raw data from SHTP packet (Q14 format)
+    // Order for Gaming Rotation Vector is: i, j, k, real (x, y, z, w)
     int16_t raw_i = (int16_t)(data[1] << 8 | data[0]);
     int16_t raw_j = (int16_t)(data[3] << 8 | data[2]);
     int16_t raw_k = (int16_t)(data[5] << 8 | data[4]);
@@ -121,18 +122,29 @@ void parseAndRemap(uint8_t* data) {
     float qw = raw_r / 16384.0f;
 
     // 3. Calculate Euler Angles (Standard Z-Y-X sequence)
-    // Roll
-    m_roll = 90 - (atan2(2 * (qw * qx + qy * qz), 1 - 2 * (qx * qx + qy * qy)) * 180.0 / M_PI);
-
-    // Pitch
-    double sinp = 2 * (qw * qy - qz * qx);
+    double temp_roll, temp_pitch, temp_yaw;
     
-    if (std::abs(sinp) >= 1)
-        m_pitch = std::copysign(M_PI / 2, sinp) * 180.0 / M_PI;
-    else
-        m_pitch = asin(sinp) * 180.0 / M_PI;
+    // Calculate sin(pitch) for singularity check
+    double sinp = 2 * (qw * qy - qz * qx);
 
-    // Yaw
-    m_yaw = (-1 * (atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)) * 180.0 / M_PI)) - 90;
+    if (std::abs(sinp) >= 0.999) {
+        // Singularity Case: Pitch is +/- 90 degrees
+        // Force roll to 0 to prevent unstable jumps
+        temp_pitch = std::copysign(M_PI / 2, sinp);
+        temp_roll = 0.0;
+        temp_yaw = 2 * atan2(qx, qw);
+    } else {
+        // Standard Case
+        temp_pitch = asin(sinp);
+        temp_roll = atan2(2 * (qw * qx + qy * qz), 1 - 2 * (qx * qx + qy * qy));
+        temp_yaw = atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+    }
 
+    // 4. Convert to degrees and apply custom camera offsets
+    // Original remap logic preserved after stabilization:
+    // Roll: 90 - calculated_roll
+    // Yaw: calculated_yaw - 90
+    m_roll  = 90.0 - (temp_roll * 180.0 / M_PI);
+    m_pitch = temp_pitch * 180.0 / M_PI;
+    m_yaw   = (temp_yaw * 180.0 / M_PI) - 90.0;
 }
