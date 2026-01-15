@@ -10,11 +10,11 @@
 #include <cstdint>
 #include <cstdio> 
 
-// Pitch roll and heading. There may not be an updated
+// Pitch roll and yaw. There may not be an updated
 // with every call to getAttitude.
 static double m_pitch   = 0.0;
 static double m_roll    = 0.0;
-static double m_heading = 0.0;
+static double m_yaw = 0.0;
 
 // I2C bus that is connected to the BNo085
 int i2c_bus = 0;
@@ -25,6 +25,15 @@ uint8_t buffer[128];
 void enableRotationVector(int fd);
 void parseAndRemap(uint8_t* data);
 
+/**
+ * @brief Initialize the I2C bus and enable the rotation vector caclulations. 
+ *
+ * Setup the I2C bus on the Raspberry Pi. Open communications with the 
+ * BNO085 9DOF Sensor and enable the Rotation Vector sensing and calculations.
+ *
+ * @param param_name Description of the parameter, its role, and any constraints.
+ * @return error - 0 for no error, 1 for I2C initialization failure.
+ */
 int initAttitude(){
 
     i2c_bus = open("/dev/i2c-1", O_RDWR);
@@ -39,7 +48,16 @@ int initAttitude(){
 
 }
 
-void getAttitude(double *pitch, double *roll, double *heading){
+/**
+ * @brief Get the current Attitude. 
+ *
+ * Receive the current Pitch, Roll and yaw Angle.
+ *
+ * @return pitch - Camera pitch angle.
+ * @return roll  - Camera roll angle.
+ * @return yaw   - Camera yaw angle.
+ */
+void getAttitude(double *pitch, double *roll, double *yaw){
 
     int bytes = read(i2c_bus, buffer, 128);
     if (bytes > 4 && buffer[2] == 0x03) { // Channel 3: Input Reports
@@ -47,7 +65,7 @@ void getAttitude(double *pitch, double *roll, double *heading){
         while (i < bytes - 10) {
             if (buffer[i] == 0xFB) { // Skip Timebase Report (5 bytes)
                 i += 5;
-            } else if (buffer[i] == 0x05) { // Found Rotation Vector
+            } else if (buffer[i] == 0x08) { // Found Gaming Rotation Vector
                 parseAndRemap(&buffer[i + 4]); // 4-byte offset: ID, Seq, Status, Delay
                 break;
             } else {
@@ -58,23 +76,37 @@ void getAttitude(double *pitch, double *roll, double *heading){
 
     *pitch   = m_pitch;
     *roll    = m_roll;
-    *heading = m_heading;
+    *yaw = m_yaw;
 }
 
-
-
-
+/**
+ * @brief Enable the rotation vector report on BNO085. 
+ *
+ * Enable the sensing and calculation of the current Pitch, Roll 
+ * and Yaw Angle.
+ *
+ * @param fd I2C bus identifier.
+ */
 void enableRotationVector(int fd) {
     // SHTP Header (4 bytes) + Set Feature Command (17 bytes)
     uint8_t cmd[21] = {
-        21, 0, 2, 0,       // Length 21, Channel 2 (Control), Seq 0
-        0xFD, 0x05, 0, 0, 0, 
-        0x50, 0xC3, 0, 0,  // 50,000us (20Hz)
+        21, 0, 2, 0,          // Length 21, Channel 2 (Control), Seq 0
+        0xFD, 0x08, 0, 0, 0,  // 0x08 Gaming Rotation Vector - Gaming ignores magnetometer to reduce jumps. The Yaw drifts and is not tied to Heading.
+        0x50, 0xC3, 0, 0,     // 50,000us (20Hz)
         0, 0, 0, 0, 0, 0, 0, 0
     };
     write(fd, cmd, 21);
 }
 
+/**
+ * @brief Parse, convert and remap the angle data.
+ *
+ * Parse the response from the BNO085, convert it to Pitch,
+ * Roll and Yaw angles and remap to the orientation of
+ * sensor on the camera.
+ *
+ * @param data Raw binary data recieved form the BNO085 sensor. Header removed.
+ */
 void parseAndRemap(uint8_t* data) {
     // 1. Extract raw data from SHTP packet (Q14 format)
     int16_t raw_i = (int16_t)(data[1] << 8 | data[0]);
@@ -100,17 +132,7 @@ void parseAndRemap(uint8_t* data) {
     else
         m_pitch = asin(sinp) * 180.0 / M_PI;
 
-    // Heading
-    m_heading = (-1 * (atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)) * 180.0 / M_PI)) - 90;
+    // Yaw
+    m_yaw = (-1 * (atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)) * 180.0 / M_PI)) - 90;
 
-    // Adjust heading to 0 to 360 deg
-    if (m_heading < 0){
-        m_heading += 360;
-    }
-    else if (m_heading > 360){
-        m_heading -= 360;
-    }
-
-    //printf("Pitch: %6.2f | Roll: %6.2f | Heading: %6.2f   \r", m_pitch, m_roll, m_heading);
-    //fflush(stdout);
 }
