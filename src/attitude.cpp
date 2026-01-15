@@ -31,7 +31,6 @@ void parseAndRemap(uint8_t* data);
  * Setup the I2C bus on the Raspberry Pi. Open communications with the 
  * BNO085 9DOF Sensor and enable the Rotation Vector sensing and calculations.
  *
- * @param param_name Description of the parameter, its role, and any constraints.
  * @return error - 0 for no error, 1 for I2C initialization failure.
  */
 int initAttitude(){
