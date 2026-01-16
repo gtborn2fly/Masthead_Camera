@@ -41,7 +41,7 @@ static void on_draw_overlay(GstElement *overlay, cairo_t *cr, guint64 timestamp,
 
     // --- DRAW PITCH LADDER ---
     // The "Horizon Center" is moved vertically by the current pitch
-    double vertical_pitch_offset = (pitch + VERTICAL_OFFSET_DEG) * height_per_deg;
+    double vertical_pitch_offset = (pitch + (VERTICAL_OFFSET_DEG * cos(roll_rad))) * height_per_deg; // The Vertical offset is for the camera tilt up. As the camera rolls, that tilt needs to be removed from the offset
 
     // Add each of the pitch lines based on their definitions in ANGLE_LINE_SETTINGS
     for (auto cur_line : ANGLE_LINE_SETTINGS) {
