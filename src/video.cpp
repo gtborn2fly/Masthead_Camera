@@ -62,7 +62,7 @@ static void on_draw_overlay(GstElement *overlay, cairo_t *cr, guint64 timestamp,
         // 4. Draw the horizontal line (relative to new 0,0)
         cairo_set_source_rgb(cr, 1.0, 1.0, 1.0); 
         cairo_set_line_width(cr, 3.0);
-        
+
         double line_half_width = (WIDTH * cur_line.width_ratio) / 2.0;
         cairo_move_to(cr, -line_half_width, 0);
         cairo_line_to(cr, line_half_width, 0);
@@ -121,21 +121,19 @@ int startStreaming() {
     // angle ladder on the display. If the bridge is some degrees above the horizon, the 
     // camera (and mast) will pass below it.
     // Note: videoconvert to BGRA is required for Cairo, then back to NV12 for x264enc
-    const std::string pipeline_desc = 
+    const std::string pipeline_desc =
 
         // Select the forward facing camera to stream from
         "libcamerasrc camera-name=\"/base/axi/pcie@1000120000/rp1/i2c@88000/imx708@1a\" ! "
-        // Set the desired format, resolution and frame rate                                   
-        "video/x-raw,format=NV12,width=" + std::to_string(WIDTH) + ",height=" + std::to_string(HEIGHT) + ",framerate=30/1 ! " 
+        // Set the desired format, resolution and frame rate
+        "video/x-raw,format=BGRx,width=" + std::to_string(WIDTH) + ",height=" + std::to_string(HEIGHT) + ",framerate=30/1 ! "
         // Add a queue to separate the camera hardware reading from the software image processing
-        "queue max-size-buffers=1 leaky=downstream ! videoconvert ! "
+        "queue max-size-buffers=1 leaky=downstream ! "
         // Valve - The valve passes on data to the next step when the stream is active and throws out the
         //         data when it is not. This disables all of the down stream processing when this stream
-        //         is not in use. This is valuable, because there are two camera streams, but only one 
+        //         is not in use. This is valuable, because there are two camera streams, but only one
         //         is used at a time and allows the active one to use all of the computing power of the Pi.
-        "valve name=stream_valve drop=true ! " 
-        // Convert to BGRA format. This is required for the Cairo Overlay library.
-        "video/x-raw,format=BGRA ! " 
+        "valve name=stream_valve drop=true ! "
         // Generate the pitch ladder overlay and add it to the video signal
         "cairooverlay name=horizon_overlay ! "
         // Convert back to the NV12 format used by the x264 encoder
@@ -144,36 +142,36 @@ int startStreaming() {
         "queue max-size-buffers=1 leaky=downstream ! "
         // Encode the video using x264enc. This is software encoding. A future improvemnet would be to
         // update this to use the graphics chip to encode the video.
-        "x264enc tune=zerolatency speed-preset=ultrafast bitrate=3000 threads=4 key-int-max=30 ! "
+        "x264enc tune=zerolatency speed-preset=ultrafast bitrate=8000 threads=4 key-int-max=30 ! "
         // Add a queue to seperate the encoding from parsing and streaming.
         "queue max-size-buffers=1 leaky=downstream ! "
         // Parse the encoded video in preperation for streaming it.
         "h264parse ! "
         // Wrap the encoded video in mpegtsmux for use with the ipad video players.
-        "mpegtsmux latency=0 pat-interval=100000 pmt-interval=100000 ! " 
+        "mpegtsmux latency=0 pat-interval=100000 pmt-interval=100000 ! "
         // Stream the video on port 5000 in SRT UDP SRT format. Do no start the stream until a connection is requested
         "srtsink name=mysink uri=srt://:5000?mode=listener&latency=50 wait-for-connection=true sync=false";
 
     // Pipeline 2: Standard stream
-    const std::string pipeline_desc2 = 
+    const std::string pipeline_desc2 =
         // Select the downwared facing camera to stream from
         "libcamerasrc camera-name=\"/base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a\" ! "
-        // Set the desired format, resolution and frame rate                                   
+        // Set the desired format, resolution and frame rate
         "video/x-raw,format=NV12,width=" + std::to_string(WIDTH_2) + ",height=" + std::to_string(HEIGHT_2) + ",framerate=30/1 ! "
         // Add a queue to separate the camera hardware reading from the software image processing
         "queue max-size-buffers=1 leaky=downstream ! "
         // Valve - The valve passes on data to the next step when the stream is active and throws out the
         //         data when it is not. This disables all of the down stream processing when this stream
-        //         is not in use. This is valuable, because there are two camera streams, but only one 
+        //         is not in use. This is valuable, because there are two camera streams, but only one
         //         is used at a time and allows the active one to use all of the computing power of the Pi.
-        "valve name=stream_valve2 drop=true ! " 
+        "valve name=stream_valve2 drop=true ! "
         // Flight the video 180 degrees to get the correct bow forward direction on the video stream.
-        "videoflip method=rotate-180 ! videoconvert ! "
+        "videoflip method=rotate-180 ! "
         // Add a queue to seperate the video flipping from the encoding.
         "queue max-size-buffers=1 leaky=downstream ! "
         // Encode the video using x264enc. This is software encoding. A future improvemnet would be to
         // update this to use the graphics chip to encode the video.
-        "x264enc tune=zerolatency speed-preset=ultrafast bitrate=3000 threads=4 key-int-max=30 ! "
+        "x264enc tune=zerolatency speed-preset=ultrafast bitrate=8000 threads=4 key-int-max=30 ! "
         // Add a queue to seperate the encoding from parsing and streaming.
         "queue max-size-buffers=1 leaky=downstream ! "
         // Parse the encoded video in preperation for streaming it.
