@@ -157,7 +157,7 @@ int startStreaming() {
     // Pipeline 2: Standard stream
     const std::string pipeline_desc2 = 
         // Select the downwared facing camera to stream from
-        "libcamerasrc camera-name=\"/base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a\" awb-mode=coolwhite ! "
+        "libcamerasrc camera-name=\"/base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a\" ! "
         // Set the desired format, resolution and frame rate                                   
         "video/x-raw,format=NV12,width=" + std::to_string(WIDTH_2) + ",height=" + std::to_string(HEIGHT_2) + ",framerate=30/1 ! "
         // Add a queue to separate the camera hardware reading from the software image processing
