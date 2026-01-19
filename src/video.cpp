@@ -146,11 +146,11 @@ int startStreaming() {
         // Add a queue to seperate the encoding from parsing and streaming.
         "queue max-size-buffers=1 leaky=downstream ! "
         // Parse the encoded video in preperation for streaming it.
-        "h264parse ! "
+        //"h264parse config-interval=-1 ! "
         // Wrap the encoded video in mpegtsmux for use with the ipad video players.
-        "mpegtsmux latency=0 pat-interval=100000 pmt-interval=100000 ! "
+        "mpegtsmux alignment=7 latency=0 pcr-interval=20 scte-35-null-interval=0 ! " 
         // Stream the video on port 5000 in SRT UDP SRT format. Do no start the stream until a connection is requested
-        "srtsink name=mysink uri=srt://:5000?mode=listener&latency=50 wait-for-connection=true sync=false";
+        "srtsink name=mysink uri=srt://:5000?mode=listener&latency=20&payloadsize=1316&tlpktdrop=true&too_late_delay_ignore=true wait-for-connection=true sync=false";
 
     // Pipeline 2: Standard stream
     const std::string pipeline_desc2 =
@@ -175,11 +175,11 @@ int startStreaming() {
         // Add a queue to seperate the encoding from parsing and streaming.
         "queue max-size-buffers=1 leaky=downstream ! "
         // Parse the encoded video in preperation for streaming it.
-        "h264parse ! "
+        //"h264parse ! "
         // Wrap the encoded video in mpegtsmux for use with the ipad video players.
-        "mpegtsmux latency=0 pat-interval=100000 pmt-interval=100000 ! " 
+        "mpegtsmux alignment=7 latency=0 pcr-interval=20 scte-35-null-interval=0 ! " 
         // Stream the video on port 5001 in SRT UDP SRT format. Do no start the stream until a connection is requested
-        "srtsink name=mysink2 uri=srt://:5001?mode=listener&latency=50 wait-for-connection=true";
+        "srtsink name=mysink2 uri=srt://:5001?mode=listener&latency=20&payloadsize=1316&tlpktdrop=true&too_late_delay_ignore=true wait-for-connection=true sync=false";
 
     // Parse the pipeline strings to create the pipelines.
     pipeline = gst_parse_launch(pipeline_desc.c_str(), NULL);
