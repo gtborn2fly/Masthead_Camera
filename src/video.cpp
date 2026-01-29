@@ -165,10 +165,6 @@ int startStreaming() {
         //         is not in use. This is valuable, because there are two camera streams, but only one
         //         is used at a time and allows the active one to use all of the computing power of the Pi.
         "valve name=stream_valve2 drop=true ! "
-        // Flight the video 180 degrees to get the correct bow forward direction on the video stream.
-        "videoflip method=rotate-180 ! "
-        // Add a queue to seperate the video flipping from the encoding.
-        "queue max-size-buffers=1 leaky=downstream ! "
         // Encode the video using x264enc. This is software encoding. A future improvemnet would be to
         // update this to use the graphics chip to encode the video.
         "x264enc tune=zerolatency speed-preset=ultrafast bitrate=8000 threads=4 key-int-max=30 ! "

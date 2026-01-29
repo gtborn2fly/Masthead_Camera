@@ -26,9 +26,9 @@ static const AngleLineSettings ANGLE_LINE_SETTINGS[] = {{-10, .3, true},
 static const int WIDTH   = 1280, HEIGHT   = 1080;
 static const int WIDTH_2 = 1280, HEIGHT_2 = 1080;
 
-static const int VERTICAL_FOV_DEG      = 41;
-static const int HORIZONTAL_FOV_DEG    = 67;
-static const float VERTICAL_OFFSET_DEG = 15.0;  // Angle that the camera is pitched up.
+static const int   VERTICAL_FOV_DEG    = 41;
+static const int   HORIZONTAL_FOV_DEG  = 67;
+static const float VERTICAL_OFFSET_DEG = 10.0;  // Angle that the camera is pitched up.
 
 // Public Function Prototypes
 int startStreaming();
